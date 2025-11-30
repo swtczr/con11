@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Nardello — чат интерфейс</title>
+<style>
+:root{--bg:#0d0f12;--panel:#111418;--text:#e6e8eb;--muted:#a4acb8;--border:#20262e;--accent:#18a957}
+html,body{height:100%} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+.wrap{max-width:840px;margin:0 auto;padding:24px}.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+.row{display:flex;gap:8px}.chat{margin-top:16px;display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto}
+.msg{padding:12px 14px;border:1px solid var(--border);border-radius:12px;max-width:90%}.user{background:#0e1116;margin-left:auto}.bot{background:#12171d}
+input{flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:#0e1116;color:var(--text)}button{padding:12px 16px;border-radius:10px;border:1px solid #1f4d35;background:var(--accent);color:#02150d;font-weight:600;cursor:pointer}
+a{color:#82d2a7;text-decoration:none}.hint{color:var(--muted);font-size:14px}
+</style></head>
+<body><div class="wrap"><div class="card">
+<h1 style="margin:0 0 8px 0;font-size:18px">Поиск документа по коду</h1>
+<div class="row"><input id="code" placeholder="например: ks.010.030.wh"/><button id="send">Отправить</button></div>
+<div class="hint" style="margin-top:6px">Shift+Enter — новая строка · Ctrl/⌘+Enter — отправить</div>
+<div id="chat" class="chat"></div>
+</div></div>
+<script>
+const chat=document.getElementById('chat'); const input=document.getElementById('code'); const btn=document.getElementById('send');
+function esc(s){return String(s).replace(/[&<>\"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;', "'":'&#39;' }
+
+// Превращаем Drive/Docs ID в кликабельный URL, если пришёл не полный линк
+function normalizeLink(raw){
+  if(!raw) return '';
+  const s = String(raw).trim();
+  if(/^https?:\/\//i.test(s)) return s;
+  // По умолчанию считаем, что это ID файла на Google Drive
+  return `https://drive.google.com/file/d/${encodeURIComponent(s)}/view?usp=sharing`;
+  // Если используете Google Docs ID, замените на:
+  // return `https://docs.google.com/document/d/${encodeURIComponent(s)}/edit`;
+}
+
+// Очень лёгкая "разметка": поддерживаем только **жирный** и переносы строк
+function lightMarkdownToHtml(txt){
+  const safe = esc(txt);
+  return safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+}
+[m]));}
+function addMsg(html,who='bot'){const d=document.createElement('div');d.className='msg '+who;d.innerHTML=html;chat.appendChild(d);chat.scrollTop=chat.scrollHeight;return d;}
+async function send(){const code=input.value.trim(); if(!code){input.focus();return;} addMsg(esc(code),'user'); input.value='';
+ const thinking=addMsg('⏳ Обрабатываю…','bot');
+ try{
+   const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+   const data=await resp.json().catch(()=>null);
+   if(resp.ok && data && (String(data.status||'').toLowerCase()==='success')){
+     const payload=(data && data.data)||{};
+     const descr=esc(payload.description||'Документ найден');
+     const link=payload.link?`<div class="hint" style="margin-top:8px"><a href="${esc(payload.link)}" target="_blank" rel="noopener">Открыть документ</a></div>`:'';
+     thinking.innerHTML=`${descr}${link}`;
+   }else{
+     const msg=esc((data && (data.message||data.error))||`Ошибка: ${resp.status}`);
+     thinking.innerHTML=`⚠️ ${msg}`;
+   }
+ }catch(e){thinking.innerHTML='⚠️ Сетевая ошибка';}
+}
+btn.addEventListener('click',send); input.addEventListener('keydown',e=>{if(e.key==='Enter' && !e.shiftKey){e.preventDefault();send();}});
+</script></body></html>
